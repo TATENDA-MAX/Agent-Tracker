@@ -1,23 +1,47 @@
 import streamlit as st
 import pandas as pd
 from tracker_logic import process_data, get_agent_summary, get_overdue_tracker
+from db_manager import init_db, add_sales, add_receipts, get_all_sales, get_all_receipts, clear_db
 
 st.set_page_config(page_title="Insurance Agent Debt Tracker", layout="wide")
+
+# Initialize Database
+init_db()
 
 st.title("Insurance Agent Debt Tracker")
 
 st.sidebar.header("Upload Data")
-sales_file = st.sidebar.file_uploader("Upload Sales Report (CSV)", type=["csv"])
-receipts_file = st.sidebar.file_uploader("Upload Receipts (CSV)", type=["csv"])
+sales_file = st.sidebar.file_uploader("Upload New Sales Report (CSV)", type=["csv"])
+receipts_file = st.sidebar.file_uploader("Upload New Receipts (CSV)", type=["csv"])
 
-if sales_file and receipts_file:
-    sales_df = pd.read_csv(sales_file)
-    receipts_df = pd.read_csv(receipts_file)
+if st.sidebar.button("Process Uploads"):
+    if sales_file:
+        new_sales = pd.read_csv(sales_file)
+        add_sales(new_sales)
+        st.sidebar.success("Sales added to database!")
+    if receipts_file:
+        new_receipts = pd.read_csv(receipts_file)
+        add_receipts(new_receipts)
+        st.sidebar.success("Receipts added to database!")
 
+if st.sidebar.button("Clear Database"):
+    clear_db()
+    st.sidebar.warning("Database cleared!")
+    st.rerun()
+
+# Load all data from database
+sales_df = get_all_sales()
+receipts_df = get_all_receipts()
+
+if not sales_df.empty:
     try:
+        # If we have sales but no receipts, create an empty df with correct columns for receipts
+        if receipts_df.empty:
+            receipts_df = pd.DataFrame(columns=['Date', 'Agent', 'Amount'])
+
         processed_df = process_data(sales_df, receipts_df)
 
-        st.header("Agent Summary")
+        st.header("Agent Summary (Cumulative)")
         summary_df = get_agent_summary(processed_df)
         st.dataframe(summary_df.style.format({"Total Owed": "${:.2f}", "Current Balance": "${:.2f}"}))
 
@@ -51,7 +75,7 @@ if sales_file and receipts_file:
         st.info("Please ensure your CSV files have the correct columns (Date, Agent, Client, Amount for Sales; Date, Agent, Amount for Receipts).")
 
 else:
-    st.info("Please upload both Sales Report and Receipts CSV files to begin.")
+    st.info("The database is currently empty. Please upload Sales Report and Receipts CSV files and click 'Process Uploads'.")
 
     with st.expander("See Sample Format"):
         st.write("### Sales Report")
